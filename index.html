@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>One Ear Wonder</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#bfe9ff;font-family:"Trebuchet MS",system-ui,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+canvas{display:block;width:100vw;height:100vh;height:100dvh}
+#hud{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#fff;border-radius:20px;padding:6px 18px;font-size:24px;font-weight:bold;color:#5a3ea8;box-shadow:0 3px 0 #0002;pointer-events:none}
+.pad{position:fixed;bottom:16px;width:174px;height:174px;display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px)}
+.pad{left:16px}
+.pad button{font-size:28px;border:0;border-radius:16px;background:#ffffffcc;color:#5a3ea8;box-shadow:0 3px 0 #0003;touch-action:none}
+.pad button.on{background:#ffd84d}
+#up{grid-column:2;grid-row:1}#left{grid-column:1;grid-row:2}#right{grid-column:3;grid-row:2}#down{grid-column:2;grid-row:3}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff8;text-align:center;color:#5a3ea8}
+.screen h1{font-size:clamp(36px,8vw,72px);margin:0 0 8px;text-shadow:0 4px 0 #fff}
+.screen p{font-size:clamp(18px,3.5vw,26px);margin:6px 20px}
+.big{font-size:32px;padding:16px 40px;border:0;border-radius:30px;background:#ff7ab8;color:#fff;font-weight:bold;box-shadow:0 5px 0 #c04a86;margin-top:16px}
+.hide{display:none}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud">🎵 <span id="count">0</span> / 10</div>
+<div class="pad" id="pad"><button id="up" data-d="up">▲</button><button id="left" data-d="left">◀</button><button id="right" data-d="right">▶</button><button id="down" data-d="down">▼</button></div>
+<div class="screen" id="start"><h1>One Ear Wonder</h1><p>Wiggle has one BIG ear that hears everything!</p><p>Find 10 happy sounds. When the ear glows, a sound is near!</p><p>Arrows / WASD, the big buttons, or drag your finger.</p><button class="big" id="go">Play!</button></div>
+<div class="screen hide" id="win"><h1>You heard them all!</h1><p>Wiggle's ear is so happy! 🎉</p><button class="big" id="again">Play again</button></div>
+<script>
+(()=>{
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),GOAL=10;
+let W=0,H=0,DPR=1;
+const G={state:'start',count:0,p:{x:0,y:0,vx:0,vy:0,face:1},sounds:[],pops:[],t:0,keys:{},btn:{},drag:null,GOAL};
+window.OEW=G;
+function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+  G.p.x=Math.min(Math.max(G.p.x,30),W-30);G.p.y=Math.min(Math.max(G.p.y,70),H-30);}
+addEventListener('resize',resize);
+const KINDS=[{n:'bird',e:'🐦',c:'#4cc9f0',f:880},{n:'bell',e:'🔔',c:'#ffb703',f:660},{n:'giggle',e:'😄',c:'#ff70a6',f:990},{n:'note',e:'🎵',c:'#9b5de5',f:523},{n:'drum',e:'🥁',c:'#06d6a0',f:330}];
+function spawn(){let x,y,i=0;do{x=40+Math.random()*(W-80);y=90+Math.random()*(H-140);i++}while(i<30&&Math.hypot(x-G.p.x,y-G.p.y)<160);
+  G.sounds.push({x,y,k:KINDS[Math.floor(Math.random()*KINDS.length)],ph:Math.random()*6});}
+function reset(){G.count=0;G.sounds=[];G.pops=[];G.p.x=W/2;G.p.y=H/2;G.p.vx=G.p.vy=0;for(let i=0;i<3;i++)spawn();upd();}
+function upd(){document.getElementById('count').textContent=G.count;}
+// audio, only after a tap
+let AC=null;function audio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();}
+function beep(f,d=0.15){if(!AC)return;try{const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.15,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d);o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
+function collect(s){G.sounds.splice(G.sounds.indexOf(s),1);G.count++;upd();G.pops.push({x:s.x,y:s.y,c:s.k.c,t:0});beep(s.k.f);beep(s.k.f*1.5,0.25);
+  if(G.count>=GOAL){G.state='win';beep(1046,0.5);document.getElementById('win').classList.remove('hide');}else spawn();}
+G.collect=collect;
+function start(){audio();document.getElementById('start').classList.add('hide');document.getElementById('win').classList.add('hide');reset();G.state='play';}
+document.getElementById('go').addEventListener('click',start);
+document.getElementById('again').addEventListener('click',start);
+G.start=start;
+// keyboard
+const KM={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right'};
+addEventListener('keydown',e=>{if(KM[e.code]){G.keys[KM[e.code]]=true;e.preventDefault();}});
+addEventListener('keyup',e=>{if(KM[e.code])G.keys[KM[e.code]]=false;});
+addEventListener('blur',()=>{G.keys={};G.btn={};});
+// buttons
+document.querySelectorAll('.pad button').forEach(b=>{const d=b.dataset.d;
+  const on=e=>{e.preventDefault();audio();G.btn[d]=true;b.classList.add('on')},off=e=>{G.btn[d]=false;b.classList.remove('on')};
+  b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);});
+// drag on canvas (drag wins over buttons)
+cv.addEventListener('pointerdown',e=>{audio();G.drag={id:e.pointerId,x:e.clientX,y:e.clientY};try{cv.setPointerCapture(e.pointerId)}catch(_){}});
+cv.addEventListener('pointermove',e=>{if(G.drag&&G.drag.id===e.pointerId){G.drag.x=e.clientX;G.drag.y=e.clientY;}});
+const endDrag=e=>{if(G.drag&&G.drag.id===e.pointerId)G.drag=null};
+cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
+document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturestart',e=>e.preventDefault());
+function step(dt){const p=G.p,SP=Math.max(220,Math.min(W,H)*0.55);let tx=0,ty=0;
+  if(G.drag){const dx=G.drag.x-p.x,dy=G.drag.y-p.y,d=Math.hypot(dx,dy);if(d>6){tx=dx/d*Math.min(1,d/60);ty=dy/d*Math.min(1,d/60);}}
+  else{const k=Object.assign({},G.keys);for(const d in G.btn)if(G.btn[d])k[d]=true;tx=(k.right?1:0)-(k.left?1:0);ty=(k.down?1:0)-(k.up?1:0);const l=Math.hypot(tx,ty);if(l>1){tx/=l;ty/=l;}}
+  p.vx=tx*SP;p.vy=ty*SP;p.x=Math.min(Math.max(p.x+p.vx*dt,30),W-30);p.y=Math.min(Math.max(p.y+p.vy*dt,70),H-30);if(tx)p.face=tx>0?1:-1;
+  for(const s of G.sounds.slice())if(Math.hypot(s.x-p.x,s.y-p.y)<48)collect(s);}
+function near(){let m=1e9;for(const s of G.sounds)m=Math.min(m,Math.hypot(s.x-G.p.x,s.y-G.p.y));return m;}
+G.near=near;
+function draw(){const t=G.t;
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#bfe9ff');g.addColorStop(1,'#fff3c4');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#9be38a';ctx.beginPath();ctx.ellipse(W*0.2,H+40,W*0.5,H*0.3,0,0,7);ctx.ellipse(W*0.8,H+60,W*0.5,H*0.28,0,0,7);ctx.fill();
+  for(let i=0;i<6;i++){const fx=(i*197+50)%W,fy=H-40-(i*53)%120;ctx.fillStyle=['#ff70a6','#ffd84d','#fff'][i%3];ctx.beginPath();ctx.arc(fx,fy,7,0,7);ctx.fill();ctx.fillStyle='#ffb703';ctx.beginPath();ctx.arc(fx,fy,3,0,7);ctx.fill();}
+  ctx.fillStyle='#fff';for(let i=0;i<3;i++){const cx=((t*15+i*W/3)%(W+200))-100,cy=60+i*35;ctx.beginPath();ctx.arc(cx,cy,26,0,7);ctx.arc(cx+28,cy-10,30,0,7);ctx.arc(cx+56,cy,24,0,7);ctx.fill();}
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const s of G.sounds){const b=Math.sin(t*3+s.ph)*5;for(let r=0;r<3;r++){const rr=((t*30+r*14)%42)+18;ctx.strokeStyle=s.k.c;ctx.globalAlpha=1-rr/60;ctx.lineWidth=4;ctx.beginPath();ctx.arc(s.x,s.y+b,rr,0,7);ctx.stroke();}
+    ctx.globalAlpha=1;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(s.x,s.y+b,20,0,7);ctx.fill();ctx.font='26px sans-serif';ctx.fillText(s.k.e,s.x,s.y+b+1);}
+  for(const q of G.pops){ctx.globalAlpha=Math.max(0,1-q.t);ctx.strokeStyle=q.c;ctx.lineWidth=6;ctx.beginPath();ctx.arc(q.x,q.y,20+q.t*80,0,7);ctx.stroke();ctx.font='30px sans-serif';ctx.fillText('♪',q.x+q.t*30,q.y-q.t*60);}
+  ctx.globalAlpha=1;
+  const p=G.p,n=near(),hear=Math.max(0,1-n/260),wig=Math.sin(t*(8+hear*20))*(0.08+hear*0.35),bob=Math.sin(t*6)*(Math.hypot(p.vx,p.vy)>1?3:1);
+  ctx.save();ctx.translate(p.x,p.y+bob);
+  ctx.fillStyle='#0002';ctx.beginPath();ctx.ellipse(0,30,26,7,0,0,7);ctx.fill();
+  // ear
+  ctx.save();ctx.translate(0,-22);ctx.rotate(wig);
+  if(hear>0){ctx.fillStyle='rgba(255,216,77,'+(0.25+hear*0.5)+')';ctx.beginPath();ctx.ellipse(0,-34,26+hear*10,40+hear*10,0,0,7);ctx.fill();}
+  ctx.fillStyle='#ff9ec7';ctx.beginPath();ctx.ellipse(0,-34,20,36,0,0,7);ctx.fill();ctx.fillStyle='#ffd1e3';ctx.beginPath();ctx.ellipse(0,-32,10,24,0,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='#ff9ec7';ctx.beginPath();ctx.arc(0,0,28,0,7);ctx.fill();
+  ctx.fillStyle='#fff';const ex=p.face*5;ctx.beginPath();ctx.arc(ex-9,-4,7,0,7);ctx.arc(ex+9,-4,7,0,7);ctx.fill();
+  ctx.fillStyle='#333';ctx.beginPath();ctx.arc(ex-8+p.face*2,-3,3.5,0,7);ctx.arc(ex+10+p.face*2,-3,3.5,0,7);ctx.fill();
+  ctx.strokeStyle='#c04a86';ctx.lineWidth=3;ctx.beginPath();ctx.arc(ex,7,8,0.2,Math.PI-0.2);ctx.stroke();
+  ctx.fillStyle='#ff6f91';ctx.globalAlpha=0.5;ctx.beginPath();ctx.arc(ex-18,6,5,0,7);ctx.arc(ex+18,6,5,0,7);ctx.fill();ctx.globalAlpha=1;
+  ctx.restore();}
+let last=performance.now();
+function loop(now){const dt=Math.min(0.05,(now-last)/1000);last=now;G.t+=dt;if(G.state==='play')step(dt);
+  for(const q of G.pops)q.t+=dt*1.5;G.pops=G.pops.filter(q=>q.t<1);draw();requestAnimationFrame(loop);}
+resize();reset();requestAnimationFrame(loop);
+})();
+</script></body></html>
